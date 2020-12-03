@@ -88,7 +88,7 @@ class NewspaperConfig(Config):
     # enough positive proposals to fill this and keep a positive:negative
     # ratio of 1:3. You can increase the number of proposals by adjusting
     # the RPN NMS threshold.
-    TRAIN_ROIS_PER_IMAGE=20
+    # TRAIN_ROIS_PER_IMAGE=20
 
 
 ############################################################
