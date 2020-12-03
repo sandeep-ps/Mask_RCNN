@@ -80,7 +80,7 @@ class NewspaperConfig(Config):
     # The Mask RCNN paper uses lr=0.02, but on TensorFlow it causes
     # weights to explode. Likely due to differences in optimizer
     # implementation.
-    LEARNING_RATE = 0.1
+    LEARNING_RATE = 0.01  # Initial value was 0.1
     LEARNING_MOMENTUM = 0.9
 
     # Number of ROIs per image to feed to classifier/mask heads
@@ -237,7 +237,7 @@ def train(model):
     print("Training network heads")
     model.train(dataset_train, dataset_val,
                 learning_rate=config.LEARNING_RATE,
-                epochs=5,  # 30
+                epochs=30,  # 30
                 layers='heads')
 
 
