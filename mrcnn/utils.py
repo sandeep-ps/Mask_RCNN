@@ -10,6 +10,7 @@ Written by Waleed Abdulla
 import sys
 import os
 import math
+import logging
 import random
 import numpy as np
 import tensorflow as tf
