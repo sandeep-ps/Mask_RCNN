@@ -232,7 +232,7 @@ def train(model):
     dataset_val.prepare()
 
     # Image augmentation
-    # http://imgaug.readthedocs.io/en/latest/source/augmenters.html
+    # https://imgaug.readthedocs.io/en/latest/source/overview_of_augmenters.html
     augmentation = iaa.SomeOf((0, 3), [
         iaa.Fliplr(0.5),
         iaa.Affine(rotate=(-5, 5)),
