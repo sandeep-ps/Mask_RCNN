@@ -34,6 +34,7 @@ import json
 import datetime
 import numpy as np
 import skimage.draw
+from imgaug import augmenters as iaa
 
 # Root directory of the project
 ROOT_DIR = os.path.abspath("../../")
@@ -230,6 +231,15 @@ def train(model):
     dataset_val.load_newspaper(args.dataset, "val")
     dataset_val.prepare()
 
+    # Image augmentation
+    # http://imgaug.readthedocs.io/en/latest/source/augmenters.html
+    augmentation = iaa.SomeOf((0, 3), [
+        iaa.Fliplr(0.5),
+        iaa.Affine(rotate=(-5, 5)),
+        iaa.Multiply((0.8, 1.5)),
+        iaa.GaussianBlur(sigma=(0.0, 1.0))
+    ])
+
     # *** This training schedule is an example. Update to your needs ***
     # Since we're using a very small dataset, and starting from
     # COCO trained weights, we don't need to train too long. Also,
@@ -238,6 +248,7 @@ def train(model):
     model.train(dataset_train, dataset_val,
                 learning_rate=config.LEARNING_RATE,
                 epochs=30,  # 30
+                augmentation=augmentation,
                 layers='heads')
 
 
