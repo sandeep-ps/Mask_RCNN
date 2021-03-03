@@ -34,7 +34,11 @@ import json
 import datetime
 import numpy as np
 import skimage.draw
+import warnings
 from imgaug import augmenters as iaa
+
+# Ignore warnings
+warnings.filterwarnings("ignore")
 
 # Root directory of the project
 ROOT_DIR = os.path.abspath("../../")
@@ -75,7 +79,7 @@ class NewspaperConfig(Config):
     STEPS_PER_EPOCH = 100  # Initial value was 100
 
     # Skip detections with < 90% confidence
-    DETECTION_MIN_CONFIDENCE = 0.6  # Initial value was 0.9
+    DETECTION_MIN_CONFIDENCE = 0.7  # Initial value was 0.9
 
     # Learning rate and momentum
     # The Mask RCNN paper uses lr=0.02, but on TensorFlow it causes
