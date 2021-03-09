@@ -16,7 +16,8 @@ import logging
 from collections import OrderedDict
 import multiprocessing
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 import keras
 import keras.backend as K
 import keras.layers as KL
