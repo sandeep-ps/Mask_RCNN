@@ -1,6 +1,6 @@
 """
 Mask R-CNN
-Train on example newspaper dataset and implement color splash effect.
+Train on example newspaper dataset and evaluate on an image or dataset.
 
 Copyright (c) 2018 Matterport, Inc.
 Licensed under the MIT License (see LICENSE for details)
@@ -21,13 +21,14 @@ Usage: import the module (see Jupyter notebooks for examples), or run from
     # Train a new model starting from ImageNet weights
     python3 newspaper.py train --dataset=/path/to/newspaper/dataset --weights=imagenet
 
-    # Apply color splash to an image
-    python3 newspaper.py splash --weights=/path/to/weights/file.h5 --image=<URL or path to file>
+    # Evaluate trained model on an image
+    python3 newspaper.py eval --weights=/path/to/weights/file.h5 --image=<path to file>
 
-    # Apply color splash to video using the last weights you trained
-    python3 newspaper.py splash --weights=last --video=<URL or path to file>
+    # Evaluate trained model on an image dataset
+    python3 newspaper.py eval --weights=/path/to/weights/file.h5 --eval-dataset=<path to directory containing images>
 """
 
+import cv2
 import os
 import sys
 import json
@@ -36,6 +37,7 @@ import numpy as np
 import skimage.draw
 import warnings
 from imgaug import augmenters as iaa
+from mrcnn.visualize import display_images
 
 # Ignore warnings
 warnings.filterwarnings("ignore")
@@ -328,6 +330,68 @@ def detect_and_color_splash(model, image_path=None, video_path=None):
     print("Saved to ", file_name)
 
 
+def generate_and_save_segments(image, result, dirname, filename):
+
+    segmented_images = []
+
+    # Iterate through the regions and save the image segments
+    for i in range(len(result['rois'])):
+
+        x = result['rois'][i][0]
+        y = result['rois'][i][1]
+        width = result['rois'][i][2]
+        height = result['rois'][i][3]
+        crop_img = image[x:width, y:height]
+
+        path =  os.path.join(dirname, filename + "-seg-" + str(i) + ".png")
+        cv2.imwrite(path, cv2.cvtColor(crop_img, cv2.COLOR_RGB2BGR))
+        segmented_images.append(crop_img)
+
+    return segmented_images
+
+
+def detect_and_segment_single_image(image_path, out_dir):
+    image = cv2.imread(image_path, cv2.IMREAD_COLOR)
+    # Detect objects
+    r = model.detect([image], verbose=1)[0]
+    # Get dir and filenames
+    if out_dir is None:
+        dirname = os.path.dirname(image_path)
+    else:
+        dirname = out_dir
+        # Create output folder
+        if not os.path.exists(dirname):
+            os.mkdir(dirname)
+    filename = os.path.basename(image_path).split(".")[0]
+    # Segment images
+    segmented_images = generate_and_save_segments(image, r, dirname, filename)
+    # Display image segments
+    display_images(segmented_images)
+
+
+def detect_and_segment(model=None, image_path=None, eval_dataset=None, out_dir=None):
+
+    # Image
+    if image_path and os.path.isfile(image_path):
+        # Run model detection and generate newspaper segments
+        print("Running on {}".format(args.image))
+        detect_and_segment_single_image(image_path, out_dir)
+    # Eval dataset
+    elif eval_dataset and os.path.isdir(eval_dataset):
+        image_filenames_list = []
+        dir_path = ""
+        # Get filenames
+        for (dir_path, dir_names, filenames) in os.walk(eval_dataset):
+            image_filenames_list.extend(filenames)
+            break
+        # Get filenames
+        for image_filename in image_filenames_list:
+            if str(image_filename).endswith(".png"):
+                # Run model detection and generate newspaper segments
+                print("Running on {}".format(image_filename))
+                detect_and_segment_single_image(os.path.join(dir_path, image_filename), out_dir)
+
+
 ############################################################
 #  Training
 ############################################################
@@ -340,35 +404,35 @@ if __name__ == '__main__':
         description='Train Mask R-CNN to segment newspaper articles.')
     parser.add_argument("command",
                         metavar="<command>",
-                        help="'train' or 'splash'")
+                        help="'train' or 'eval'")
     parser.add_argument('--dataset', required=False,
                         metavar="/path/to/newspaper/dataset/",
                         help='Directory of the Newspaper dataset')
-    parser.add_argument('--weights', required=True,
+    parser.add_argument('--weights', required=False,
                         metavar="/path/to/weights.h5",
-                        help="Path to weights .h5 file or 'coco'")
+                        help="Path to weights .h5 file or 'coco'", default=None)
     parser.add_argument('--logs', required=False,
                         default=DEFAULT_LOGS_DIR,
                         metavar="/path/to/logs/",
                         help='Logs and checkpoints directory (default=logs/)')
     parser.add_argument('--image', required=False,
-                        metavar="path or URL to image",
-                        help='Image to apply the color splash effect on')
-    parser.add_argument('--video', required=False,
-                        metavar="path or URL to video",
-                        help='Video to apply the color splash effect on')
+                        metavar="path to image",
+                        help='Image to apply the model and generate newspaper article segments.')
+    parser.add_argument('--eval-dataset', required=False,
+                        metavar="path to image dataset",
+                        help='Image dataset to apply the model and generate newspaper article segments.')
+    parser.add_argument('--out-dir', required=False,
+                        metavar="path to output directory",
+                        default=None,
+                        help='Output directory path to store segment images.')
     args = parser.parse_args()
 
     # Validate arguments
     if args.command == "train":
         assert args.dataset, "Argument --dataset is required for training"
-    elif args.command == "splash":
-        assert args.image or args.video,\
-               "Provide --image or --video to apply color splash"
-
-    print("Weights: ", args.weights)
-    print("Dataset: ", args.dataset)
-    print("Logs: ", args.logs)
+    elif args.command == "eval":
+        assert args.image or args.eval_dataset,\
+               "Provide --image or --eval-dataset to apply model and generate newspaper article segments."
 
     # Configurations
     if args.command == "train":
@@ -389,6 +453,13 @@ if __name__ == '__main__':
     else:
         model = modellib.MaskRCNN(mode="inference", config=config,
                                   model_dir=args.logs)
+
+    if args.weights is None:
+        args.weights = model.find_last()
+
+    print("Weights: ", args.weights)
+    print("Dataset: ", args.dataset)
+    print("Logs: ", args.logs)
 
     # Select weights file to load
     if args.weights.lower() == "coco":
@@ -419,9 +490,8 @@ if __name__ == '__main__':
     # Train or evaluate
     if args.command == "train":
         train(model)
-    elif args.command == "splash":
-        detect_and_color_splash(model, image_path=args.image,
-                                video_path=args.video)
+    elif args.command == "eval":
+        detect_and_segment(model, image_path=args.image, eval_dataset=args.eval_dataset, out_dir=args.out_dir)
     else:
         print("'{}' is not recognized. "
-              "Use 'train' or 'splash'".format(args.command))
+              "Use 'train' or 'eval'".format(args.command))
