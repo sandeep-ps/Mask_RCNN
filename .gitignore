@@ -56,3 +56,9 @@ pip-delete-this-directory.txt
 .venv
 venv/
 ENV/
+
+# output dir
+samples/newspaper/output/*
+
+# temp file
+*.DS_Store
