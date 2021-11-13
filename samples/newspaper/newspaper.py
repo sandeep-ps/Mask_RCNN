@@ -330,6 +330,7 @@ def detect_and_color_splash(model, image_path=None, video_path=None):
     print("Saved to ", file_name)
 
 
+
 def generate_and_save_segments(image, result, dirname, filename, class_ids=None):
 
     segmented_images = []
