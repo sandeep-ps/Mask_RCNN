@@ -1,6 +1,6 @@
 """
 Mask R-CNN
-Train on example newspaper dataset and evaluate on an image or dataset.
+Train on example newspaper dataset and test on an image or dataset.
 
 Copyright (c) 2018 Matterport, Inc.
 Licensed under the MIT License (see LICENSE for details)
@@ -21,11 +21,11 @@ Usage: import the module (see Jupyter notebooks for examples), or run from
     # Train a new model starting from ImageNet weights
     python3 newspaper.py train --dataset=/path/to/newspaper/dataset --weights=imagenet
 
-    # Evaluate trained model on an image
-    python3 newspaper.py eval --weights=/path/to/weights/file.h5 --image=<path to file>
+    # Test trained model on an image
+    python3 newspaper.py test --weights=/path/to/weights/file.h5 --image=<path to file>
 
-    # Evaluate trained model on an image dataset
-    python3 newspaper.py eval --weights=/path/to/weights/file.h5 --eval-dataset=<path to directory containing images>
+    # Test trained model on an image dataset
+    python3 newspaper.py test --weights=/path/to/weights/file.h5 --dataset=<path to directory containing images>
 """
 
 import cv2
@@ -118,7 +118,7 @@ class NewspaperDataset(utils.Dataset):
         self.add_class("newspaper", 6, "banner")
 
         # Train or validation dataset?
-        assert subset in ["train", "val"]
+        assert subset in ["train", "val", "test"]
         dataset_dir = os.path.join(dataset_dir, subset)
 
         # Load annotations
@@ -330,7 +330,7 @@ def detect_and_color_splash(model, image_path=None, video_path=None):
     print("Saved to ", file_name)
 
 
-def generate_and_save_segments(image, result, dirname, filename):
+def generate_and_save_segments(image, result, dirname, filename, class_ids=None):
 
     segmented_images = []
 
@@ -341,16 +341,19 @@ def generate_and_save_segments(image, result, dirname, filename):
         y = result['rois'][i][1]
         width = result['rois'][i][2]
         height = result['rois'][i][3]
-        crop_img = image[x:width, y:height]
+        class_id = result['class_ids'][i]
 
-        path =  os.path.join(dirname, filename + "-seg-" + str(i) + ".png")
-        cv2.imwrite(path, cv2.cvtColor(crop_img, cv2.COLOR_RGB2BGR))
-        segmented_images.append(crop_img)
+        # If class IDs are provided, segment only those classes.
+        if class_ids is None or class_id in class_ids:
+            crop_img = image[x:width, y:height]
+            path = os.path.join(dirname, filename + "-seg-" + str(i) + ".png")
+            cv2.imwrite(path, cv2.cvtColor(crop_img, cv2.COLOR_RGB2BGR))
+            segmented_images.append(crop_img)
 
     return segmented_images
 
 
-def detect_and_segment_single_image(image_path, out_dir):
+def detect_and_segment_single_image(model, image_path, out_dir, class_ids=None):
     image = cv2.imread(image_path, cv2.IMREAD_COLOR)
     # Detect objects
     r = model.detect([image], verbose=1)[0]
@@ -364,24 +367,42 @@ def detect_and_segment_single_image(image_path, out_dir):
             os.mkdir(dirname)
     filename = os.path.basename(image_path).split(".")[0]
     # Segment images
-    segmented_images = generate_and_save_segments(image, r, dirname, filename)
+    segmented_images = generate_and_save_segments(image, r, dirname, filename, class_ids=class_ids)
     # Display image segments
-    display_images(segmented_images)
+    # TODO: Commented out for now.
+    # display_images(segmented_images)
 
 
-def detect_and_segment(model=None, image_path=None, eval_dataset=None, out_dir=None):
+def detect_and_segment(model=None, image_path=None, dataset=None, out_dir=None, class_names=None):
+
+    class_ids = []
 
     # Image
     if image_path and os.path.isfile(image_path):
         # Run model detection and generate newspaper segments
         print("Running on {}".format(args.image))
-        detect_and_segment_single_image(image_path, out_dir)
-    # Eval dataset
-    elif eval_dataset and os.path.isdir(eval_dataset):
+        # TODO: Fix class_ids for individual images and then uncomment below line.
+        # detect_and_segment_single_image(model, image_path, out_dir, class_ids=class_ids)
+    # Test dataset
+    elif dataset and os.path.isdir(dataset):
+        # Read dataset
+        val_dataset = NewspaperDataset()
+        val_dataset.load_newspaper(dataset, "test")
+        val_dataset.prepare()
+
+        print(val_dataset.map_source_class_id("newspaper.5"))
+        print(val_dataset.class_names)
+
+        for info in val_dataset.class_info:
+            for class_name in class_names:
+                if info["name"] == class_name:
+                    class_ids.append(info["id"])
+
         image_filenames_list = []
         dir_path = ""
+        test_dataset_path = os.path.join(dataset, "test")
         # Get filenames
-        for (dir_path, dir_names, filenames) in os.walk(eval_dataset):
+        for (dir_path, dir_names, filenames) in os.walk(test_dataset_path):
             image_filenames_list.extend(filenames)
             break
         # Get filenames
@@ -389,7 +410,8 @@ def detect_and_segment(model=None, image_path=None, eval_dataset=None, out_dir=N
             if str(image_filename).endswith(".png"):
                 # Run model detection and generate newspaper segments
                 print("Running on {}".format(image_filename))
-                detect_and_segment_single_image(os.path.join(dir_path, image_filename), out_dir)
+                detect_and_segment_single_image(model, os.path.join(dir_path, image_filename), out_dir,
+                                                class_ids=class_ids)
 
 
 ############################################################
@@ -404,7 +426,7 @@ if __name__ == '__main__':
         description='Train Mask R-CNN to segment newspaper articles.')
     parser.add_argument("command",
                         metavar="<command>",
-                        help="'train' or 'eval'")
+                        help="'train' or 'test'")
     parser.add_argument('--dataset', required=False,
                         metavar="/path/to/newspaper/dataset/",
                         help='Directory of the Newspaper dataset')
@@ -418,21 +440,23 @@ if __name__ == '__main__':
     parser.add_argument('--image', required=False,
                         metavar="path to image",
                         help='Image to apply the model and generate newspaper article segments.')
-    parser.add_argument('--eval-dataset', required=False,
-                        metavar="path to image dataset",
-                        help='Image dataset to apply the model and generate newspaper article segments.')
     parser.add_argument('--out-dir', required=False,
                         metavar="path to output directory",
                         default=None,
                         help='Output directory path to store segment images.')
+    parser.add_argument('--classes', required=False,
+                        metavar="List of classes.",
+                        action="append", nargs="+", type=str, default=None,
+                        choices=["ad", "article", "masthead", "run_head", "photo", "banner"],
+                        help='Classes to test the trained model on.')
     args = parser.parse_args()
 
     # Validate arguments
     if args.command == "train":
         assert args.dataset, "Argument --dataset is required for training"
-    elif args.command == "eval":
-        assert args.image or args.eval_dataset,\
-               "Provide --image or --eval-dataset to apply model and generate newspaper article segments."
+    elif args.command == "test":
+        assert args.image or args.dataset,\
+               "Provide --image or --dataset to apply model and generate newspaper article segments."
 
     # Configurations
     if args.command == "train":
@@ -487,11 +511,12 @@ if __name__ == '__main__':
     else:
         model.load_weights(weights_path, by_name=True)
 
-    # Train or evaluate
+    # Train or Test
     if args.command == "train":
         train(model)
-    elif args.command == "eval":
-        detect_and_segment(model, image_path=args.image, eval_dataset=args.eval_dataset, out_dir=args.out_dir)
+    elif args.command == "test":
+        detect_and_segment(model, image_path=args.image, dataset=args.dataset, out_dir=args.out_dir,
+                           class_names=args.classes[0])
     else:
         print("'{}' is not recognized. "
-              "Use 'train' or 'eval'".format(args.command))
+              "Use 'train' or 'test'".format(args.command))
