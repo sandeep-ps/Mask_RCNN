@@ -18,14 +18,14 @@ Usage: import the module (see Jupyter notebooks for examples), or run from
     # Resume training a model that you had trained earlier
     python3 newspaper.py train --dataset=/path/to/newspaper/dataset --weights=last
 
-    # Train a new model starting from ImageNet weights
-    python3 newspaper.py train --dataset=/path/to/newspaper/dataset --weights=imagenet
-
     # Test trained model on an image
     python3 newspaper.py test --weights=/path/to/weights/file.h5 --image=<path to file>
 
     # Test trained model on an image dataset
     python3 newspaper.py test --weights=/path/to/weights/file.h5 --dataset=<path to directory containing images>
+
+    # Test trained model on an image by providing specific classes (e.g. photo)
+    python3 newspaper.py test --weights=/path/to/weights/file.h5 --image=<path to file> --classes photo
 """
 
 import cv2
@@ -423,23 +423,25 @@ if __name__ == '__main__':
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(
-        description='Train Mask R-CNN to segment newspaper articles.')
+        description='Train Mask R-CNN to segment newspaper pages.')
     parser.add_argument("command",
                         metavar="<command>",
                         help="'train' or 'test'")
     parser.add_argument('--dataset', required=False,
                         metavar="/path/to/newspaper/dataset/",
-                        help='Directory of the Newspaper dataset')
+                        help="Directory of the Newspaper dataset. This directory should contain 'train', 'val', and "
+                             "'test' folders.")
     parser.add_argument('--weights', required=False,
                         metavar="/path/to/weights.h5",
-                        help="Path to weights .h5 file or 'coco'", default=None)
+                        help="Path to weights .h5 file or 'coco'. If this option is not provided, the most recently "
+                             "trained weights are used.", default=None)
     parser.add_argument('--logs', required=False,
                         default=DEFAULT_LOGS_DIR,
                         metavar="/path/to/logs/",
                         help='Logs and checkpoints directory (default=logs/)')
     parser.add_argument('--image', required=False,
                         metavar="path to image",
-                        help='Image to apply the model and generate newspaper article segments.')
+                        help='Image to apply the model and generate newspaper page segments.')
     parser.add_argument('--out-dir', required=False,
                         metavar="path to output directory",
                         default=None,
