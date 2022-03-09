@@ -161,6 +161,10 @@ class NewspaperDataset(utils.Dataset):
         # annotations. Skip unannotated images.
         annotations = [a for a in annotations if a['regions']]
 
+        # Lists to store image dimensions
+        widths = []
+        heights = []
+
         # Add images
         for a in annotations:
             # Get the x, y coordinates of points of the polygons that make up
@@ -181,6 +185,8 @@ class NewspaperDataset(utils.Dataset):
             image_path = os.path.join(dataset_dir, a['filename'])
             image = skimage.io.imread(image_path)
             height, width = image.shape[:2]
+            widths.append(width)
+            heights.append(height)
 
             self.add_image(
                 "newspaper",
@@ -188,6 +194,13 @@ class NewspaperDataset(utils.Dataset):
                 path=image_path,
                 width=width, height=height,
                 polygons=polygons)
+
+        # Calculate average image dimension
+        avg_height = round(sum(heights)/len(heights))
+        avg_width = round(sum(widths)/len(widths))
+
+        # Print average image dimension
+        print(str(subset) + " image average dimension: " + str(avg_width) + " x " + str(avg_height))
 
     def load_mask(self, image_id):
         """Generate instance masks for an image.
