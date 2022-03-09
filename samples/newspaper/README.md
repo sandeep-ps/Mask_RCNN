@@ -67,3 +67,36 @@ python3 newspaper.py test --weights=/path/to/weights/file.h5 --dataset=<path to 
 
 ## Run Jupyter notebooks
 Open the `inspect_newspaper_data.ipynb` or `inspect_newspaper_model.ipynb` Jupyter notebooks. You can use these notebooks to explore the dataset and run through the detection pipeline step by step.
+
+
+## Newspaper Collection Annotation
+
+We used VIA (VGG Image Annotator - version 2.0.10) to annotate sample images from the Library of Congress Chronicling America Newspaper collection.
+
+The following are the annotation attributes (region/file attributes in VIA) that we used:
+
+```json
+{
+  "region": {
+    "Newspaper": {
+      "type": "dropdown",
+      "description": "Newspaper",
+      "options": {
+        "0": "background",
+        "1": "ad",
+        "2": "article",
+        "3": "masthead",
+        "4": "run_head",
+        "5": "photo",
+        "6": "banner"
+      },
+      "default_options": {
+        "2": true
+      }
+    }
+  },
+  "file": {}
+}
+```
+
+From this, the `background` class was not used while actually doing the annotations.
