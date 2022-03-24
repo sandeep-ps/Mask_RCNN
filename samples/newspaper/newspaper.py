@@ -67,20 +67,20 @@ class NewspaperConfig(Config):
     Derives from the base Config class and overrides some values.
     """
     # Give the configuration a recognizable name
-    NAME = "Newspaper"
+    NAME = "newspaper"
 
     # We use a GPU with 12GB memory, which can fit two images.
     # Adjust down if you use a smaller GPU.
-    IMAGES_PER_GPU = 2
+    IMAGES_PER_GPU = 4
 
     # Number of classes (including background)
     # Background + Ad + Article + Masthead + Runhead + Photo + Banner
     NUM_CLASSES = 1 + 6
 
     # Number of training steps per epoch
-    STEPS_PER_EPOCH = 100  # Initial value was 100
+    STEPS_PER_EPOCH = 500  # Initial value was 100
 
-    # Skip detections with < 90% confidence
+    # Skip detections with < 70% confidence
     DETECTION_MIN_CONFIDENCE = 0.7  # Initial value was 0.9
 
     # Learning rate and momentum
@@ -95,7 +95,7 @@ class NewspaperConfig(Config):
     # enough positive proposals to fill this and keep a positive:negative
     # ratio of 1:3. You can increase the number of proposals by adjusting
     # the RPN NMS threshold.
-    # TRAIN_ROIS_PER_IMAGE=20
+    TRAIN_ROIS_PER_IMAGE = 128
 
 
 ############################################################
@@ -244,6 +244,7 @@ def train(model):
     dataset_train = NewspaperDataset()
     dataset_train.load_newspaper(args.dataset, "train")
     dataset_train.prepare()
+    print(dataset_train.class_info)
 
     # Validation dataset
     dataset_val = NewspaperDataset()
@@ -260,15 +261,24 @@ def train(model):
     ])
 
     # *** This training schedule is an example. Update to your needs ***
+
     # Since we're using a very small dataset, and starting from
     # COCO trained weights, we don't need to train too long. Also,
     # no need to train all layers, just the heads should do it.
+
     print("Training network heads")
     model.train(dataset_train, dataset_val,
                 learning_rate=config.LEARNING_RATE,
                 epochs=30,  # 30
                 augmentation=augmentation,
                 layers='heads')
+
+    print("Train all layers")
+    model.train(dataset_train, dataset_val,
+                learning_rate=config.LEARNING_RATE,
+                epochs=40,
+                augmentation=augmentation,
+                layers='all')
 
 
 def color_splash(image, mask):
