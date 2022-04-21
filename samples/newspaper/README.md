@@ -6,9 +6,9 @@ This is an example showing the use of Mask R-CNN in segmenting newspaper pages i
 ```bash
 usage: newspaper.py [-h] [--dataset /path/to/newspaper/dataset/]
                     [--weights /path/to/weights.h5] [--logs /path/to/logs/]
-                    [--image path to image]
                     [--out-dir path to output directory]
                     [--classes List of classes. [List of classes. ...]]
+                    [--zip-segments]
                     <command>
 
 Train Mask R-CNN to segment newspaper pages.
@@ -27,13 +27,12 @@ optional arguments:
                         used.
   --logs /path/to/logs/
                         Logs and checkpoints directory (default=logs/)
-  --image path to image
-                        Image to apply the model and generate newspaper page
-                        segments.
   --out-dir path to output directory
                         Output directory path to store segment images.
   --classes List of classes. [List of classes. ...]
                         Classes to test the trained model on.
+  --zip-segments        Pass this parameter to move the generated image
+                        segments into a zip file.
 ```
 
 ## Train the Newspaper Model
