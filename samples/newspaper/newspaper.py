@@ -475,7 +475,9 @@ if __name__ == '__main__':
                         help='Logs and checkpoints directory (default=logs/)')
     parser.add_argument('--image', required=False,
                         metavar="path to image",
-                        help='Image to apply the model and generate newspaper page segments.')
+                        # TODO: Remove help suppression after fixing single image processing.
+                        # help='Image to apply the model and generate newspaper page segments.',
+                        help=argparse.SUPPRESS)
     parser.add_argument('--out-dir', required=False,
                         metavar="path to output directory",
                         default=None,
