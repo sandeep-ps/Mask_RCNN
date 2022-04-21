@@ -181,11 +181,18 @@ If you use Docker, the code has been verified to work on
 ## Installation
 1. Clone this repository
 2. ```cd``` into repository directory.
-3. Create Python (3.4, 3.5, 3.6 supported) virtual environment and activate
+3. Create Python (3.4, 3.5, 3.6 supported) virtual environment, activate, and install dependencies
    ```bash
    python3 -m venv venv
    source venv/bin/activate
    pip install --upgrade pip
+   ```
+3. Alternatively, if using Conda, create Conda environment and install dependencies
+   ```bash
+   conda create --name my-conda-env python=3.6
+   conda activate my-conda-env
+   pip install --upgrade pip
+   pip install -r requirements_conda.txt
    ```
 4. Install dependencies
    ```bash

@@ -37,6 +37,7 @@ import numpy as np
 import skimage.draw
 import warnings
 from imgaug import augmenters as iaa
+from  zipfile import ZipFile
 from mrcnn.visualize import display_images
 
 # Ignore warnings
@@ -67,7 +68,7 @@ class NewspaperConfig(Config):
     Derives from the base Config class and overrides some values.
     """
     # Give the configuration a recognizable name
-    NAME = "Newspaper"
+    NAME = "newspaper"
 
     # We use a GPU with 12GB memory, which can fit two images.
     # Adjust down if you use a smaller GPU.
@@ -80,14 +81,14 @@ class NewspaperConfig(Config):
     # Number of training steps per epoch
     STEPS_PER_EPOCH = 100  # Initial value was 100
 
-    # Skip detections with < 90% confidence
+    # Skip detections with < 70% confidence
     DETECTION_MIN_CONFIDENCE = 0.7  # Initial value was 0.9
 
     # Learning rate and momentum
     # The Mask RCNN paper uses lr=0.02, but on TensorFlow it causes
     # weights to explode. Likely due to differences in optimizer
     # implementation.
-    LEARNING_RATE = 0.01  # Initial value was 0.1
+    LEARNING_RATE = 0.001  # Initial value was 0.1
     LEARNING_MOMENTUM = 0.9
 
     # Number of ROIs per image to feed to classifier/mask heads
@@ -95,7 +96,7 @@ class NewspaperConfig(Config):
     # enough positive proposals to fill this and keep a positive:negative
     # ratio of 1:3. You can increase the number of proposals by adjusting
     # the RPN NMS threshold.
-    # TRAIN_ROIS_PER_IMAGE=20
+    # TRAIN_ROIS_PER_IMAGE = 128
 
 
 ############################################################
@@ -244,6 +245,7 @@ def train(model):
     dataset_train = NewspaperDataset()
     dataset_train.load_newspaper(args.dataset, "train")
     dataset_train.prepare()
+    print(dataset_train.class_info)
 
     # Validation dataset
     dataset_val = NewspaperDataset()
@@ -260,15 +262,24 @@ def train(model):
     ])
 
     # *** This training schedule is an example. Update to your needs ***
+
     # Since we're using a very small dataset, and starting from
     # COCO trained weights, we don't need to train too long. Also,
     # no need to train all layers, just the heads should do it.
+
     print("Training network heads")
     model.train(dataset_train, dataset_val,
                 learning_rate=config.LEARNING_RATE,
                 epochs=30,  # 30
                 augmentation=augmentation,
                 layers='heads')
+
+    print("Train all layers")
+    model.train(dataset_train, dataset_val,
+                learning_rate=config.LEARNING_RATE,
+                epochs=40,
+                augmentation=augmentation,
+                layers='all')
 
 
 def color_splash(image, mask):
@@ -343,10 +354,10 @@ def detect_and_color_splash(model, image_path=None, video_path=None):
     print("Saved to ", file_name)
 
 
-
 def generate_and_save_segments(image, result, dirname, filename, class_ids=None):
 
     segmented_images = []
+    segmented_image_filepaths = []
 
     # Iterate through the regions and save the image segments
     for i in range(len(result['rois'])):
@@ -363,11 +374,12 @@ def generate_and_save_segments(image, result, dirname, filename, class_ids=None)
             path = os.path.join(dirname, filename + "-seg-" + str(i) + ".png")
             cv2.imwrite(path, cv2.cvtColor(crop_img, cv2.COLOR_RGB2BGR))
             segmented_images.append(crop_img)
+            segmented_image_filepaths.append(path)
 
-    return segmented_images
+    return segmented_images, segmented_image_filepaths
 
 
-def detect_and_segment_single_image(model, image_path, out_dir, class_ids=None):
+def detect_and_segment_single_image(model, image_path, out_dir, class_ids=None, zip_segments=False):
     image = cv2.imread(image_path, cv2.IMREAD_COLOR)
     # Detect objects
     r = model.detect([image], verbose=1)[0]
@@ -381,13 +393,21 @@ def detect_and_segment_single_image(model, image_path, out_dir, class_ids=None):
             os.mkdir(dirname)
     filename = os.path.basename(image_path).split(".")[0]
     # Segment images
-    segmented_images = generate_and_save_segments(image, r, dirname, filename, class_ids=class_ids)
+    segmented_images, segmented_image_filepaths = generate_and_save_segments(image, r, dirname, filename, class_ids=class_ids)
+
+    if zip_segments:
+        # Create zip file and delete the segment image.
+        with ZipFile(os.path.join(dirname, filename + ".zip"), "w") as zip_file:
+            for segmented_image_filepath in segmented_image_filepaths:
+                zip_file.write(segmented_image_filepath, os.path.basename(segmented_image_filepath))
+                os.remove(segmented_image_filepath)
+
     # Display image segments
-    # TODO: Commented out for now.
+    # TODO: Commented out for now. Can be uncommented later.
     # display_images(segmented_images)
 
 
-def detect_and_segment(model=None, image_path=None, dataset=None, out_dir=None, class_names=None):
+def detect_and_segment(model=None, image_path=None, dataset=None, out_dir=None, class_names=None, zip_segments=False):
 
     class_ids = []
 
@@ -425,7 +445,7 @@ def detect_and_segment(model=None, image_path=None, dataset=None, out_dir=None, 
                 # Run model detection and generate newspaper segments
                 print("Running on {}".format(image_filename))
                 detect_and_segment_single_image(model, os.path.join(dir_path, image_filename), out_dir,
-                                                class_ids=class_ids)
+                                                class_ids=class_ids, zip_segments=zip_segments)
 
 
 ############################################################
@@ -455,7 +475,9 @@ if __name__ == '__main__':
                         help='Logs and checkpoints directory (default=logs/)')
     parser.add_argument('--image', required=False,
                         metavar="path to image",
-                        help='Image to apply the model and generate newspaper page segments.')
+                        # TODO: Remove help suppression after fixing single image processing.
+                        # help='Image to apply the model and generate newspaper page segments.',
+                        help=argparse.SUPPRESS)
     parser.add_argument('--out-dir', required=False,
                         metavar="path to output directory",
                         default=None,
@@ -465,6 +487,10 @@ if __name__ == '__main__':
                         action="append", nargs="+", type=str, default=None,
                         choices=["ad", "article", "masthead", "run_head", "photo", "banner"],
                         help='Classes to test the trained model on.')
+    parser.add_argument('--zip-segments', required=False,
+                        action='store_true',
+                        default=False,
+                        help='Pass this parameter to move the generated image segments into a zip file.')
     args = parser.parse_args()
 
     # Validate arguments
@@ -532,7 +558,7 @@ if __name__ == '__main__':
         train(model)
     elif args.command == "test":
         detect_and_segment(model, image_path=args.image, dataset=args.dataset, out_dir=args.out_dir,
-                           class_names=args.classes[0])
+                           class_names=args.classes[0], zip_segments=args.zip_segments)
     else:
         print("'{}' is not recognized. "
               "Use 'train' or 'test'".format(args.command))
