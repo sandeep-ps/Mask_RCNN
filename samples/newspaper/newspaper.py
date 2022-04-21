@@ -37,6 +37,7 @@ import numpy as np
 import skimage.draw
 import warnings
 from imgaug import augmenters as iaa
+from  zipfile import ZipFile
 from mrcnn.visualize import display_images
 
 # Ignore warnings
@@ -353,10 +354,10 @@ def detect_and_color_splash(model, image_path=None, video_path=None):
     print("Saved to ", file_name)
 
 
-
 def generate_and_save_segments(image, result, dirname, filename, class_ids=None):
 
     segmented_images = []
+    segmented_image_filepaths = []
 
     # Iterate through the regions and save the image segments
     for i in range(len(result['rois'])):
@@ -373,11 +374,12 @@ def generate_and_save_segments(image, result, dirname, filename, class_ids=None)
             path = os.path.join(dirname, filename + "-seg-" + str(i) + ".png")
             cv2.imwrite(path, cv2.cvtColor(crop_img, cv2.COLOR_RGB2BGR))
             segmented_images.append(crop_img)
+            segmented_image_filepaths.append(path)
 
-    return segmented_images
+    return segmented_images, segmented_image_filepaths
 
 
-def detect_and_segment_single_image(model, image_path, out_dir, class_ids=None):
+def detect_and_segment_single_image(model, image_path, out_dir, class_ids=None, zip_segments=False):
     image = cv2.imread(image_path, cv2.IMREAD_COLOR)
     # Detect objects
     r = model.detect([image], verbose=1)[0]
@@ -391,13 +393,21 @@ def detect_and_segment_single_image(model, image_path, out_dir, class_ids=None):
             os.mkdir(dirname)
     filename = os.path.basename(image_path).split(".")[0]
     # Segment images
-    segmented_images = generate_and_save_segments(image, r, dirname, filename, class_ids=class_ids)
+    segmented_images, segmented_image_filepaths = generate_and_save_segments(image, r, dirname, filename, class_ids=class_ids)
+
+    if zip_segments:
+        # Create zip file and delete the segment image.
+        with ZipFile(os.path.join(dirname, filename + ".zip"), "w") as zip_file:
+            for segmented_image_filepath in segmented_image_filepaths:
+                zip_file.write(segmented_image_filepath, os.path.basename(segmented_image_filepath))
+                os.remove(segmented_image_filepath)
+
     # Display image segments
-    # TODO: Commented out for now.
+    # TODO: Commented out for now. Can be uncommented later.
     # display_images(segmented_images)
 
 
-def detect_and_segment(model=None, image_path=None, dataset=None, out_dir=None, class_names=None):
+def detect_and_segment(model=None, image_path=None, dataset=None, out_dir=None, class_names=None, zip_segments=False):
 
     class_ids = []
 
@@ -435,7 +445,7 @@ def detect_and_segment(model=None, image_path=None, dataset=None, out_dir=None, 
                 # Run model detection and generate newspaper segments
                 print("Running on {}".format(image_filename))
                 detect_and_segment_single_image(model, os.path.join(dir_path, image_filename), out_dir,
-                                                class_ids=class_ids)
+                                                class_ids=class_ids, zip_segments=zip_segments)
 
 
 ############################################################
@@ -470,6 +480,10 @@ if __name__ == '__main__':
                         metavar="path to output directory",
                         default=None,
                         help='Output directory path to store segment images.')
+    parser.add_argument('--zip-segments', required=False,
+                        action='store_true',
+                        default=False,
+                        help='Pass this variable to store output segments in zip file.')
     parser.add_argument('--classes', required=False,
                         metavar="List of classes.",
                         action="append", nargs="+", type=str, default=None,
@@ -542,7 +556,7 @@ if __name__ == '__main__':
         train(model)
     elif args.command == "test":
         detect_and_segment(model, image_path=args.image, dataset=args.dataset, out_dir=args.out_dir,
-                           class_names=args.classes[0])
+                           class_names=args.classes[0], zip_segments=args.zip_segments)
     else:
         print("'{}' is not recognized. "
               "Use 'train' or 'test'".format(args.command))
