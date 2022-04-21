@@ -480,15 +480,15 @@ if __name__ == '__main__':
                         metavar="path to output directory",
                         default=None,
                         help='Output directory path to store segment images.')
-    parser.add_argument('--zip-segments', required=False,
-                        action='store_true',
-                        default=False,
-                        help='Pass this variable to store output segments in zip file.')
     parser.add_argument('--classes', required=False,
                         metavar="List of classes.",
                         action="append", nargs="+", type=str, default=None,
                         choices=["ad", "article", "masthead", "run_head", "photo", "banner"],
                         help='Classes to test the trained model on.')
+    parser.add_argument('--zip-segments', required=False,
+                        action='store_true',
+                        default=False,
+                        help='Pass this parameter to move the generated image segments into a zip file.')
     args = parser.parse_args()
 
     # Validate arguments
