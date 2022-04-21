@@ -71,14 +71,14 @@ class NewspaperConfig(Config):
 
     # We use a GPU with 12GB memory, which can fit two images.
     # Adjust down if you use a smaller GPU.
-    IMAGES_PER_GPU = 4
+    IMAGES_PER_GPU = 2
 
     # Number of classes (including background)
     # Background + Ad + Article + Masthead + Runhead + Photo + Banner
     NUM_CLASSES = 1 + 6
 
     # Number of training steps per epoch
-    STEPS_PER_EPOCH = 500  # Initial value was 100
+    STEPS_PER_EPOCH = 100  # Initial value was 100
 
     # Skip detections with < 70% confidence
     DETECTION_MIN_CONFIDENCE = 0.7  # Initial value was 0.9
@@ -87,7 +87,7 @@ class NewspaperConfig(Config):
     # The Mask RCNN paper uses lr=0.02, but on TensorFlow it causes
     # weights to explode. Likely due to differences in optimizer
     # implementation.
-    LEARNING_RATE = 0.01  # Initial value was 0.1
+    LEARNING_RATE = 0.001  # Initial value was 0.1
     LEARNING_MOMENTUM = 0.9
 
     # Number of ROIs per image to feed to classifier/mask heads
@@ -95,7 +95,7 @@ class NewspaperConfig(Config):
     # enough positive proposals to fill this and keep a positive:negative
     # ratio of 1:3. You can increase the number of proposals by adjusting
     # the RPN NMS threshold.
-    TRAIN_ROIS_PER_IMAGE = 128
+    # TRAIN_ROIS_PER_IMAGE = 128
 
 
 ############################################################
