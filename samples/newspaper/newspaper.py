@@ -28,17 +28,17 @@ Usage: import the module (see Jupyter notebooks for examples), or run from
     python3 newspaper.py test --weights=/path/to/weights/file.h5 --image=<path to file> --classes photo
 """
 
-import cv2
+import datetime
+import json
 import os
 import sys
-import json
-import datetime
+import warnings
+from zipfile import ZipFile
+
+import cv2
 import numpy as np
 import skimage.draw
-import warnings
 from imgaug import augmenters as iaa
-from  zipfile import ZipFile
-from mrcnn.visualize import display_images
 
 # Ignore warnings
 warnings.filterwarnings("ignore")
@@ -50,6 +50,7 @@ ROOT_DIR = os.path.abspath("../../")
 sys.path.append(ROOT_DIR)  # To find local version of the library
 from mrcnn.config import Config
 from mrcnn import model as modellib, utils
+from mrcnn.visualize import display_images
 
 # Path to trained weights file
 COCO_WEIGHTS_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
@@ -105,11 +106,9 @@ class NewspaperConfig(Config):
 
 class NewspaperDataset(utils.Dataset):
 
-    def load_newspaper(self, dataset_dir, subset):
-        """Load a subset of the Newspaper dataset.
-        dataset_dir: Root directory of the dataset.
-        subset: Subset to load: train or val
-        """
+    def __init__(self):
+        super().__init__()
+
         # Add classes. We have seven classes to add.
         self.add_class("newspaper", 1, "ad")
         self.add_class("newspaper", 2, "article")
@@ -117,6 +116,12 @@ class NewspaperDataset(utils.Dataset):
         self.add_class("newspaper", 4, "run_head")
         self.add_class("newspaper", 5, "photo")
         self.add_class("newspaper", 6, "banner")
+
+    def load_newspaper(self, dataset_dir, subset):
+        """Load a subset of the Newspaper dataset.
+        dataset_dir: Root directory of the dataset.
+        subset: Subset to load: train or val
+        """
 
         # Train or validation dataset?
         assert subset in ["train", "val", "test"]
@@ -407,34 +412,26 @@ def detect_and_segment_single_image(model, image_path, out_dir, class_ids=None, 
     # display_images(segmented_images)
 
 
-def detect_and_segment(model=None, image_path=None, dataset=None, out_dir=None, class_names=None, zip_segments=False):
+def detect_and_segment(model=None, image_path=None, test_dataset_path=None, out_dir=None, class_names=None,
+                       zip_segments=False):
 
     class_ids = []
+    test_dataset = NewspaperDataset()
+
+    for info in test_dataset.class_info:
+        for class_name in class_names:
+            if info["name"] == class_name:
+                class_ids.append(info["id"])
 
     # Image
     if image_path and os.path.isfile(image_path):
         # Run model detection and generate newspaper segments
         print("Running on {}".format(args.image))
-        # TODO: Fix class_ids for individual images and then uncomment below line.
-        # detect_and_segment_single_image(model, image_path, out_dir, class_ids=class_ids)
+        detect_and_segment_single_image(model, image_path, out_dir, class_ids=class_ids, zip_segments=zip_segments)
     # Test dataset
-    elif dataset and os.path.isdir(dataset):
-        # Read dataset
-        val_dataset = NewspaperDataset()
-        val_dataset.load_newspaper(dataset, "test")
-        val_dataset.prepare()
-
-        print(val_dataset.map_source_class_id("newspaper.5"))
-        print(val_dataset.class_names)
-
-        for info in val_dataset.class_info:
-            for class_name in class_names:
-                if info["name"] == class_name:
-                    class_ids.append(info["id"])
-
+    elif test_dataset_path and os.path.isdir(test_dataset_path):
         image_filenames_list = []
         dir_path = ""
-        test_dataset_path = os.path.join(dataset, "test")
         # Get filenames
         for (dir_path, dir_names, filenames) in os.walk(test_dataset_path):
             image_filenames_list.extend(filenames)
@@ -463,8 +460,12 @@ if __name__ == '__main__':
                         help="'train' or 'test'")
     parser.add_argument('--dataset', required=False,
                         metavar="/path/to/newspaper/dataset/",
-                        help="Directory of the Newspaper dataset. This directory should contain 'train', 'val', and "
-                             "'test' folders.")
+                        help="Directory of the Newspaper dataset. This directory should contain 'train', and 'val' "
+                             "folders.")
+    parser.add_argument('--test-dataset', required=False,
+                        metavar="/path/to/newspaper/test/dataset/",
+                        help="Directory of the Newspaper test dataset. This dataset contains images that needs to be "
+                             "processed using a trained model.")
     parser.add_argument('--weights', required=False,
                         metavar="/path/to/weights.h5",
                         help="Path to weights .h5 file or 'coco'. If this option is not provided, the most recently "
@@ -479,12 +480,12 @@ if __name__ == '__main__':
                         # help='Image to apply the model and generate newspaper page segments.',
                         help=argparse.SUPPRESS)
     parser.add_argument('--out-dir', required=False,
-                        metavar="path to output directory",
+                        metavar="/path/to/output/directory",
                         default=None,
                         help='Output directory path to store segment images.')
     parser.add_argument('--classes', required=False,
-                        metavar="List of classes.",
-                        action="append", nargs="+", type=str, default=None,
+                        # metavar="Space separated list of newspaper region types.",
+                        action="append", nargs="+", type=str, default=[["article"]],
                         choices=["ad", "article", "masthead", "run_head", "photo", "banner"],
                         help='Classes to test the trained model on.')
     parser.add_argument('--zip-segments', required=False,
@@ -497,8 +498,8 @@ if __name__ == '__main__':
     if args.command == "train":
         assert args.dataset, "Argument --dataset is required for training"
     elif args.command == "test":
-        assert args.image or args.dataset,\
-               "Provide --image or --dataset to apply model and generate newspaper article segments."
+        assert args.image or args.test_dataset,\
+               "Provide --image or --test-dataset to apply model and generate newspaper article segments."
 
     # Configurations
     if args.command == "train":
@@ -557,7 +558,7 @@ if __name__ == '__main__':
     if args.command == "train":
         train(model)
     elif args.command == "test":
-        detect_and_segment(model, image_path=args.image, dataset=args.dataset, out_dir=args.out_dir,
+        detect_and_segment(model, image_path=args.image, test_dataset_path=args.test_dataset, out_dir=args.out_dir,
                            class_names=args.classes[0], zip_segments=args.zip_segments)
     else:
         print("'{}' is not recognized. "
